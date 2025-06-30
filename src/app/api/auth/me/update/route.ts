@@ -6,7 +6,7 @@ import {
   comparePassword,
   validateEmail,
 } from "@/utils/auth";
-import UserModel from "@/models/User";
+import UserModel, { User } from "@/models/User";
 
 export async function PUT(request: NextRequest) {
   try {
@@ -54,7 +54,7 @@ export async function PUT(request: NextRequest) {
       }
     }
 
-    const updateData: Partial<any> = {
+    const updateData: Partial<User> = {
       name,
       email,
     };

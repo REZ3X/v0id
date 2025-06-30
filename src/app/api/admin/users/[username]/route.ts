@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyToken } from "@/utils/auth";
-import UserModel, { User, UserRole } from "@/models/User";
+import UserModel, { UserRole } from "@/models/User";
 
 export async function GET(
   request: NextRequest,
@@ -31,6 +31,7 @@ export async function GET(
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password, ...userWithoutPassword } = user;
     return NextResponse.json({ user: userWithoutPassword });
   } catch (error) {

@@ -4,10 +4,10 @@ import ChatModel from "@/models/Chats";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const chatId = params.id;
+    const { id: chatId } = await params;
 
     const token = request.cookies.get("auth-token")?.value;
     if (!token) {
@@ -42,10 +42,10 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const chatId = params.id;
+    const { id: chatId } = await params;
 
     const token = request.cookies.get("auth-token")?.value;
     if (!token) {

@@ -2,16 +2,23 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { UserSession } from "@/models/User";
+import Image from "next/image";
 
 export default function Navbar() {
   const [user, setUser] = useState<UserSession | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [theme, setTheme] = useState<string>("light");
+  const [mounted, setMounted] = useState(false);
   const router = useRouter();
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    setMounted(true);
     fetchUser();
+    setTimeout(() => {
+      initializeTheme();
+    }, 100);
   }, []);
 
   useEffect(() => {
@@ -27,6 +34,51 @@ export default function Navbar() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  const initializeTheme = () => {
+    try {
+      if (typeof window === "undefined") return;
+
+      const isDark = document.documentElement.classList.contains("dark");
+      const currentTheme = isDark ? "dark" : "light";
+      setTheme(currentTheme);
+
+      const savedTheme = localStorage.getItem("theme");
+      if (!savedTheme) {
+        localStorage.setItem("theme", currentTheme);
+      }
+    } catch (e) {
+      console.log("Theme initialization error:", e);
+      setTheme("light");
+    }
+  };
+
+  const applyTheme = (newTheme: string) => {
+    try {
+      if (typeof window === "undefined") return;
+
+      const htmlElement = document.documentElement;
+      if (newTheme === "dark") {
+        htmlElement.classList.add("dark");
+      } else {
+        htmlElement.classList.remove("dark");
+      }
+    } catch (e) {
+      console.log("Theme apply error:", e);
+    }
+  };
+
+  const toggleTheme = () => {
+    const newTheme = theme === "light" ? "dark" : "light";
+    setTheme(newTheme);
+    applyTheme(newTheme);
+
+    try {
+      localStorage.setItem("theme", newTheme);
+    } catch (e) {
+      console.log("Theme save error:", e);
+    }
+  };
 
   const fetchUser = async () => {
     try {
@@ -75,15 +127,46 @@ export default function Navbar() {
     }
   };
 
-  if (loading) {
+  if (!mounted || loading) {
     return (
       <nav className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm border-b border-slate-200 dark:border-slate-700 px-4 py-3">
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-slate-200 dark:bg-slate-700 rounded-lg animate-pulse"></div>
-            <div className="w-20 h-5 bg-slate-200 dark:bg-slate-700 rounded animate-pulse"></div>
-          </div>
-          <div className="w-8 h-8 bg-slate-200 dark:bg-slate-700 rounded-full animate-pulse"></div>
+          <button
+            onClick={() => router.push("/")}
+            className="flex items-center space-x-3 hover:opacity-80 transition-opacity"
+          >
+            <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center shadow-lg p-1">
+              <Image
+                src="/void/void.png"
+                alt="Void AI"
+                width={24}
+                height={24}
+                className="w-6 h-6 object-contain"
+              />
+            </div>
+            <span className="font-bold text-xl text-transparent bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text">
+              V0ID
+            </span>
+          </button>
+          {loading ? (
+            <div className="w-8 h-8 bg-slate-200 dark:bg-slate-700 rounded-full animate-pulse"></div>
+          ) : (
+            user && (
+              <div className="w-8 h-8 bg-gradient-to-br from-slate-400 to-slate-600 rounded-full flex items-center justify-center text-white shadow-sm">
+                <svg
+                  className="w-4 h-4"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </div>
+            )
+          )}
         </div>
       </nav>
     );
@@ -92,24 +175,23 @@ export default function Navbar() {
   return (
     <nav className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm border-b border-slate-200 dark:border-slate-700 px-4 py-3 relative z-10">
       <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center shadow-lg">
-            <svg
-              className="w-4 h-4 text-white"
-              fill="currentColor"
-              viewBox="0 0 20 20"
-            >
-              <path
-                fillRule="evenodd"
-                d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"
-                clipRule="evenodd"
-              />
-            </svg>
+        <button
+          onClick={() => router.push("/")}
+          className="flex items-center space-x-3 hover:opacity-80 transition-opacity focus:outline-none focus:ring-2 focus:ring-purple-500/20 rounded-lg p-1 -m-1"
+        >
+          <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center shadow-lg p-1">
+            <Image
+              src="/void/void.png"
+              alt="Void AI"
+              width={24}
+              height={24}
+              className="w-6 h-6 object-contain rounded-md"
+            />
           </div>
           <span className="font-bold text-xl text-transparent bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text">
             V0ID
           </span>
-        </div>
+        </button>
 
         {user && (
           <div className="relative" ref={dropdownRef}>
@@ -117,8 +199,18 @@ export default function Navbar() {
               onClick={() => setDropdownOpen(!dropdownOpen)}
               className="flex items-center space-x-3 p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             >
-              <div className="w-8 h-8 bg-gradient-to-br from-slate-400 to-slate-600 rounded-full flex items-center justify-center text-white font-medium text-sm">
-                {user.name.charAt(0).toUpperCase()}
+              <div className="w-8 h-8 bg-gradient-to-br from-slate-400 to-slate-600 rounded-full flex items-center justify-center text-white shadow-sm">
+                <svg
+                  className="w-4 h-4"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"
+                    clipRule="evenodd"
+                  />
+                </svg>
               </div>
 
               <div className="hidden sm:block text-left">
@@ -179,6 +271,57 @@ export default function Navbar() {
                 </div>
 
                 <div className="py-2">
+                  <button
+                    onClick={toggleTheme}
+                    className="w-full flex items-center justify-between px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                  >
+                    <div className="flex items-center space-x-3">
+                      {theme === "light" ? (
+                        <svg
+                          className="w-4 h-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
+                          />
+                        </svg>
+                      ) : (
+                        <svg
+                          className="w-4 h-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
+                          />
+                        </svg>
+                      )}
+                      <span>
+                        {theme === "light" ? "Light Theme" : "Dark Theme"}
+                      </span>
+                    </div>
+                    <div
+                      className={`w-10 h-5 rounded-full relative transition-colors duration-200 ${
+                        theme === "dark" ? "bg-purple-600" : "bg-slate-300"
+                      }`}
+                    >
+                      <div
+                        className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform duration-200 ${
+                          theme === "dark" ? "transform translate-x-5" : ""
+                        }`}
+                      ></div>
+                    </div>
+                  </button>
+
                   <button
                     onClick={() => {
                       router.push("/settings");

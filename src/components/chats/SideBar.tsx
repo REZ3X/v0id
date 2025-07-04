@@ -1,4 +1,6 @@
 "use client";
+import { useState, useMemo, useEffect } from "react";
+import Image from "next/image";
 
 interface Chat {
   _id: string;
@@ -31,6 +33,59 @@ export default function Sidebar({
   onClose,
   deletingChat,
 }: SidebarProps) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchFocus, setSearchFocus] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [nextRefreshTime, setNextRefreshTime] = useState<Date | null>(null);
+
+  useEffect(() => {
+    const REFRESH_INTERVAL = 60 * 60 * 1000;
+    const now = new Date();
+    const nextRefresh = new Date(now.getTime() + REFRESH_INTERVAL);
+    setNextRefreshTime(nextRefresh);
+
+    const autoRefreshInterval = setInterval(() => {
+      console.log("Auto-refreshing V0ID...");
+      window.location.reload();
+    }, REFRESH_INTERVAL);
+
+    const countdownInterval = setInterval(() => {
+      const now = new Date();
+      const nextRefresh = new Date(now.getTime() + REFRESH_INTERVAL);
+      setNextRefreshTime(nextRefresh);
+    }, 60000);
+    return () => {
+      clearInterval(autoRefreshInterval);
+      clearInterval(countdownInterval);
+    };
+  }, []);
+
+  const getTimeUntilRefresh = () => {
+    if (!nextRefreshTime) return "";
+
+    const now = new Date();
+    const diff = nextRefreshTime.getTime() - now.getTime();
+
+    if (diff <= 0) return "Refreshing soon...";
+
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    } else {
+      return `${minutes}m`;
+    }
+  };
+
+  const handleManualRefresh = () => {
+    setIsRefreshing(true);
+
+    setTimeout(() => {
+      window.location.reload();
+    }, 500);
+  };
+
   const handleDeleteClick = (chat: Chat, e: React.MouseEvent) => {
     e.stopPropagation();
     onRequestDelete(chat);
@@ -39,6 +94,95 @@ export default function Sidebar({
   const truncateTitle = (title: string, maxLength: number = 25) => {
     if (title.length <= maxLength) return title;
     return title.substring(0, maxLength).trim() + "...";
+  };
+
+  const filteredChats = useMemo(() => {
+    if (!searchQuery.trim()) return chats;
+
+    const query = searchQuery.toLowerCase().trim();
+
+    return chats
+      .filter((chat) => {
+        const title = chat.title.toLowerCase();
+
+        if (title === query) return true;
+
+        if (title.startsWith(query)) return true;
+
+        const titleWords = title.split(/\s+/);
+        if (titleWords.some((word) => word.startsWith(query))) return true;
+
+        if (title.includes(query)) return true;
+
+        const queryWords = query.split(/\s+/);
+        if (queryWords.length > 1) {
+          return queryWords.every((queryWord) =>
+            titleWords.some(
+              (titleWord) =>
+                titleWord.includes(queryWord) || queryWord.includes(titleWord)
+            )
+          );
+        }
+
+        if (query.length >= 3) {
+          let matchScore = 0;
+          let queryIndex = 0;
+
+          for (let i = 0; i < title.length && queryIndex < query.length; i++) {
+            if (title[i] === query[queryIndex]) {
+              matchScore++;
+              queryIndex++;
+            }
+          }
+
+          return matchScore / query.length >= 0.7;
+        }
+
+        return false;
+      })
+      .sort((a, b) => {
+        const aTitle = a.title.toLowerCase();
+        const bTitle = b.title.toLowerCase();
+
+        if (aTitle === query && bTitle !== query) return -1;
+        if (bTitle === query && aTitle !== query) return 1;
+
+        const aStarts = aTitle.startsWith(query);
+        const bStarts = bTitle.startsWith(query);
+        if (aStarts && !bStarts) return -1;
+        if (bStarts && !aStarts) return 1;
+
+        return (
+          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+        );
+      });
+  }, [chats, searchQuery]);
+
+  const highlightText = (text: string, query: string) => {
+    if (!query.trim()) return text;
+
+    const regex = new RegExp(
+      `(${query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`,
+      "gi"
+    );
+    const parts = text.split(regex);
+
+    return parts.map((part, index) =>
+      regex.test(part) ? (
+        <span
+          key={index}
+          className="bg-yellow-200 dark:bg-yellow-800/50 px-0.5 rounded"
+        >
+          {part}
+        </span>
+      ) : (
+        part
+      )
+    );
+  };
+
+  const clearSearch = () => {
+    setSearchQuery("");
   };
 
   const getRoleStyle = (role: string) => {
@@ -84,18 +228,14 @@ export default function Sidebar({
       <div className="p-6 border-b border-slate-200 dark:border-slate-700">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-lg">
-              <svg
-                className="w-5 h-5 text-white"
-                fill="currentColor"
-                viewBox="0 0 20 20"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"
-                  clipRule="evenodd"
-                />
-              </svg>
+            <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-lg p-2">
+              <Image
+                src="/void/void.png"
+                alt="Void AI"
+                width={24}
+                height={24}
+                className="w-6 h-6 object-contain"
+              />
             </div>
             <div>
               <h2 className="font-semibold text-slate-900 dark:text-slate-100">
@@ -134,12 +274,46 @@ export default function Sidebar({
           )}
         </div>
 
+        <div className="mb-3">
+          <button
+            onClick={handleManualRefresh}
+            disabled={isRefreshing}
+            className="w-full flex items-center justify-center space-x-2 py-2 px-3 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed group"
+            title="Refresh V0ID (Auto-refresh in 1 hour)"
+          >
+            <svg
+              className={`w-4 h-4 transition-transform duration-500 ${
+                isRefreshing ? "animate-spin" : "group-hover:rotate-180"
+              }`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+            <span className="text-xs font-medium">
+              {isRefreshing ? "Refreshing..." : "Refresh"}
+            </span>
+          </button>
+
+          <div className="mt-1 text-center">
+            <span className="text-xs text-slate-400 dark:text-slate-500">
+              Auto-refresh: {getTimeUntilRefresh()}
+            </span>
+          </div>
+        </div>
+
         <button
           onClick={onChatCreate}
           disabled={
             limits.chatLimit !== Infinity && chats.length >= limits.chatLimit
           }
-          className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 px-4 rounded-xl font-medium hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+          className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 px-4 rounded-xl font-medium hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 mb-4"
         >
           <div className="flex items-center justify-center space-x-2">
             <svg
@@ -159,8 +333,73 @@ export default function Sidebar({
           </div>
         </button>
 
+        <div className="relative mb-4">
+          <div
+            className={`relative flex items-center transition-all duration-200 ${
+              searchFocus
+                ? "ring-2 ring-purple-500/20 border-purple-500"
+                : "border-slate-300 dark:border-slate-600"
+            } border rounded-xl bg-white dark:bg-slate-900`}
+          >
+            <svg
+              className="w-4 h-4 text-slate-400 dark:text-slate-500 ml-3"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+            <input
+              type="text"
+              placeholder="Search chats..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onFocus={() => setSearchFocus(true)}
+              onBlur={() => setSearchFocus(false)}
+              className="flex-1 px-3 py-2.5 text-sm bg-transparent text-slate-900 dark:text-slate-100 placeholder-slate-500 dark:placeholder-slate-400 focus:outline-none"
+            />
+            {searchQuery && (
+              <button
+                onClick={clearSearch}
+                className="p-1 mr-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+              >
+                <svg
+                  className="w-4 h-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            )}
+          </div>
+
+          {searchQuery && (
+            <div className="absolute top-full left-0 right-0 mt-1">
+              <div className="text-xs text-slate-500 dark:text-slate-400 px-1">
+                {filteredChats.length === 0
+                  ? "No chats found"
+                  : `${filteredChats.length} of ${chats.length} chat${
+                      chats.length !== 1 ? "s" : ""
+                    }`}
+              </div>
+            </div>
+          )}
+        </div>
+
         {limits.chatLimit !== Infinity && (
-          <div className="mt-4 p-3 bg-slate-50 dark:bg-slate-700/50 rounded-xl">
+          <div className="p-3 bg-slate-50 dark:bg-slate-700/50 rounded-xl">
             <div className="flex justify-between text-sm text-slate-600 dark:text-slate-400 mb-1">
               <span>Chats</span>
               <span>
@@ -194,32 +433,58 @@ export default function Sidebar({
                 <div className="h-3 bg-slate-200 dark:bg-slate-600 rounded w-1/2"></div>
               </div>
             ))
-          ) : chats.length === 0 ? (
+          ) : filteredChats.length === 0 ? (
             <div className="text-center py-8">
               <div className="w-12 h-12 bg-slate-100 dark:bg-slate-700 rounded-xl flex items-center justify-center mx-auto mb-3">
-                <svg
-                  className="w-6 h-6 text-slate-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                  />
-                </svg>
+                {searchQuery ? (
+                  <svg
+                    className="w-6 h-6 text-slate-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
+                ) : (
+                  <svg
+                    className="w-6 h-6 text-slate-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                    />
+                  </svg>
+                )}
               </div>
               <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">
-                No chats yet
+                {searchQuery ? "No matching chats" : "No chats yet"}
               </p>
               <p className="text-xs text-slate-400 dark:text-slate-500">
-                Start your first conversation!
+                {searchQuery
+                  ? "Try a different search term"
+                  : "Start your first conversation!"}
               </p>
+              {searchQuery && (
+                <button
+                  onClick={clearSearch}
+                  className="mt-3 text-xs text-purple-600 dark:text-purple-400 hover:underline"
+                >
+                  Clear search
+                </button>
+              )}
             </div>
           ) : (
-            chats.map((chat) => (
+            filteredChats.map((chat) => (
               <div
                 key={chat._id}
                 className={`relative group rounded-xl transition-all duration-200 ${
@@ -235,10 +500,15 @@ export default function Sidebar({
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
                       <h3
-                        className="font-medium text-sm mb-1"
+                        className="font-medium text-sm mb-1 leading-relaxed"
                         title={chat.title}
                       >
-                        {truncateTitle(chat.title)}
+                        {searchQuery
+                          ? highlightText(
+                              truncateTitle(chat.title),
+                              searchQuery
+                            )
+                          : truncateTitle(chat.title)}
                       </h3>
                       <p
                         className={`text-xs truncate ${
@@ -261,11 +531,12 @@ export default function Sidebar({
                 <button
                   onClick={(e) => handleDeleteClick(chat, e)}
                   disabled={deletingChat === chat._id}
-                  className={`absolute top-2 right-2 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-200 ${
+                  className={`absolute top-2 right-2 p-1.5 rounded-lg transition-all duration-200 ${
                     currentChat === chat._id
-                      ? "hover:bg-white/20 text-white"
+                      ? "hover:bg-white/20 text-white/80 hover:text-white"
                       : "hover:bg-red-100 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-600 dark:hover:text-red-400"
                   }`}
+                  title="Delete chat"
                 >
                   {deletingChat === chat._id ? (
                     <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin"></div>
@@ -298,13 +569,26 @@ export default function Sidebar({
           </p>
           {userRole === "basic" && (
             <div className="text-xs text-slate-500 dark:text-slate-400">
-              <p>Need more chats?</p>
-              <a
-                href="/upgrade"
-                className="text-purple-600 dark:text-purple-400 hover:underline font-medium"
-              >
-                Upgrade to Premium
-              </a>
+              <p className="mb-1">Need more chats?</p>
+              <div className="inline-flex items-center space-x-1 px-2 py-1 bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-900/30 dark:to-pink-900/30 rounded-lg border border-purple-200 dark:border-purple-700/50">
+                <svg
+                  className="w-3 h-3 text-purple-600 dark:text-purple-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                <span className="text-purple-700 dark:text-purple-300 font-medium">
+                  Premium Coming Soon
+                </span>
+                <span className="text-purple-600 dark:text-purple-400">✨</span>
+              </div>
             </div>
           )}
         </div>

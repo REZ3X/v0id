@@ -212,7 +212,26 @@ export default function AdminPage() {
         <div className="container mx-auto px-4 py-8">
           <div className="max-w-7xl mx-auto">
             <div className="mb-8">
-              <div className="flex items-center space-x-3 mb-4">
+              <div className="flex items-center space-x-4 mb-4">
+                <button
+                  onClick={() => router.push("/")}
+                  className="flex items-center justify-center w-12 h-12 rounded-xl bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all duration-200 shadow-lg hover:shadow-xl group"
+                >
+                  <svg
+                    className="w-5 h-5 text-slate-600 dark:text-slate-400 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M15 19l-7-7 7-7"
+                    />
+                  </svg>
+                </button>
+
                 <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-indigo-600 rounded-xl flex items-center justify-center">
                   <svg
                     className="w-6 h-6 text-white"
@@ -228,6 +247,7 @@ export default function AdminPage() {
                     />
                   </svg>
                 </div>
+
                 <div>
                   <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">
                     Admin Dashboard

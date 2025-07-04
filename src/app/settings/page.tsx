@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Navbar from "@/components/shared/Navbar";
 import { User } from "@/models/User";
 
@@ -11,6 +12,7 @@ interface UpdateData {
 }
 
 export default function Settings() {
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [formData, setFormData] = useState({
     name: "",
@@ -23,6 +25,8 @@ export default function Settings() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [activeTab, setActiveTab] = useState("profile");
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [loadingProgress, setLoadingProgress] = useState(0);
 
   useEffect(() => {
     fetchUser();
@@ -30,6 +34,16 @@ export default function Settings() {
 
   const fetchUser = async () => {
     try {
+      const progressInterval = setInterval(() => {
+        setLoadingProgress((prev) => {
+          if (prev >= 90) {
+            clearInterval(progressInterval);
+            return 90;
+          }
+          return prev + Math.random() * 30;
+        });
+      }, 100);
+
       const response = await fetch("/api/auth/me");
       if (response.ok) {
         const data = await response.json();
@@ -41,9 +55,12 @@ export default function Settings() {
           newPassword: "",
           confirmPassword: "",
         });
+        setLoadingProgress(100);
       }
     } catch (error) {
       console.error("Failed to fetch user:", error);
+    } finally {
+      setTimeout(() => setInitialLoading(false), 800);
     }
   };
 
@@ -151,19 +168,90 @@ export default function Settings() {
     }
   };
 
-  if (!user) {
+  if (initialLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
-        <Navbar />
-        <div className="flex items-center justify-center py-20">
-          <div className="text-center">
-            <div className="relative">
-              <div className="w-16 h-16 border-4 border-purple-400/30 rounded-full animate-spin"></div>
-              <div className="absolute top-0 left-0 w-16 h-16 border-4 border-transparent border-t-purple-400 rounded-full animate-spin"></div>
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex flex-col items-center justify-center relative overflow-hidden">
+        <div className="absolute inset-0">
+          <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl animate-pulse"></div>
+          <div className="absolute top-3/4 right-1/4 w-96 h-96 bg-pink-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
+          <div className="absolute bottom-1/4 left-1/2 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl animate-pulse delay-500"></div>
+        </div>
+
+        <div className="relative z-10 flex flex-col items-center">
+          <div className="mb-8">
+            <div className="w-24 h-24 bg-gradient-to-br from-purple-500 to-pink-500 rounded-3xl flex items-center justify-center shadow-2xl shadow-purple-500/25 animate-bounce">
+              <svg
+                className="w-12 h-12 text-white"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                />
+              </svg>
             </div>
-            <p className="mt-6 text-purple-600 dark:text-purple-400 font-medium text-lg">
-              Loading settings...
+          </div>
+
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold text-transparent bg-gradient-to-r from-purple-400 via-pink-400 to-indigo-400 bg-clip-text mb-2 animate-pulse">
+              Settings
+            </h1>
+            <p className="text-purple-200 text-lg font-medium">
+              Loading your preferences...
             </p>
+          </div>
+
+          <div className="w-80 max-w-sm">
+            <div className="flex justify-between text-xs text-purple-300 mb-2">
+              <span>Loading</span>
+              <span>{Math.round(loadingProgress)}%</span>
+            </div>
+            <div className="w-full bg-slate-800/50 backdrop-blur-sm rounded-full h-2 overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-purple-500 via-pink-500 to-indigo-500 rounded-full transition-all duration-300 ease-out relative"
+                style={{ width: `${loadingProgress}%` }}
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer"></div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex space-x-2 mt-8">
+            <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"></div>
+            <div className="w-2 h-2 bg-pink-400 rounded-full animate-bounce delay-75"></div>
+            <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce delay-150"></div>
+          </div>
+
+          <div className="mt-6 text-purple-300 text-sm font-medium">
+            <span className="inline-block animate-pulse">
+              Preparing your settings
+            </span>
+            <span className="inline-block animate-bounce delay-100">.</span>
+            <span className="inline-block animate-bounce delay-200">.</span>
+            <span className="inline-block animate-bounce delay-300">.</span>
+          </div>
+        </div>
+
+        <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2">
+          <div className="flex items-center space-x-2 text-purple-400/60 text-xs">
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path
+                fillRule="evenodd"
+                d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
+                clipRule="evenodd"
+              />
+            </svg>
+            <span>Secured by V0ID</span>
           </div>
         </div>
       </div>
@@ -177,12 +265,35 @@ export default function Settings() {
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto">
           <div className="mb-8">
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-2">
-              Settings
-            </h1>
-            <p className="text-slate-600 dark:text-slate-400">
-              Manage your account settings and preferences
-            </p>
+            <div className="flex items-center space-x-4 mb-4">
+              <button
+                onClick={() => router.push("/")}
+                className="flex items-center justify-center w-10 h-10 rounded-xl bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all duration-200 shadow-lg hover:shadow-xl group"
+              >
+                <svg
+                  className="w-5 h-5 text-slate-600 dark:text-slate-400 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15 19l-7-7 7-7"
+                  />
+                </svg>
+              </button>
+
+              <div>
+                <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">
+                  Settings
+                </h1>
+                <p className="text-slate-600 dark:text-slate-400">
+                  Manage your account settings and preferences
+                </p>
+              </div>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -258,130 +369,138 @@ export default function Settings() {
                       </p>
                     </div>
 
-                    <div className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl p-6 mb-8 text-white">
-                      <div className="flex items-center space-x-4">
-                        <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center text-xl font-bold">
-                          {user.name.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="flex-1">
-                          <h3 className="text-xl font-semibold">{user.name}</h3>
-                          <p className="text-purple-100">@{user.username}</p>
-                          <div
-                            className={`inline-flex items-center space-x-1 mt-2 px-3 py-1 rounded-full text-sm font-medium ${getRoleStyle(
-                              user.role
-                            )}`}
-                          >
-                            <span>{getRoleIcon(user.role)}</span>
-                            <span className="capitalize">{user.role}</span>
+                    {user && (
+                      <>
+                        <div className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl p-6 mb-8 text-white">
+                          <div className="flex items-center space-x-4">
+                            <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center text-xl font-bold">
+                              {user.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="flex-1">
+                              <h3 className="text-xl font-semibold">
+                                {user.name}
+                              </h3>
+                              <p className="text-purple-100">
+                                @{user.username}
+                              </p>
+                              <div
+                                className={`inline-flex items-center space-x-1 mt-2 px-3 py-1 rounded-full text-sm font-medium ${getRoleStyle(
+                                  user.role
+                                )}`}
+                              >
+                                <span>{getRoleIcon(user.role)}</span>
+                                <span className="capitalize">{user.role}</span>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </div>
 
-                    {message && (
-                      <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300 px-4 py-3 rounded-xl text-sm mb-6">
-                        {message}
-                      </div>
-                    )}
-
-                    <form onSubmit={handleSubmit} className="space-y-6">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                            Full Name
-                          </label>
-                          <input
-                            type="text"
-                            name="name"
-                            value={formData.name}
-                            onChange={handleChange}
-                            className="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/20 transition-all duration-200 text-slate-900 dark:text-slate-100"
-                          />
-                          {errors.name && (
-                            <p className="text-red-500 text-sm mt-1">
-                              {errors.name}
-                            </p>
-                          )}
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                            Username
-                          </label>
-                          <input
-                            type="text"
-                            value={user.username}
-                            disabled
-                            className="w-full px-4 py-3 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-500 dark:text-slate-400 cursor-not-allowed"
-                          />
-                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                            Username cannot be changed
-                          </p>
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                          Email Address
-                        </label>
-                        <input
-                          type="email"
-                          name="email"
-                          value={formData.email}
-                          onChange={handleChange}
-                          className="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/20 transition-all duration-200 text-slate-900 dark:text-slate-100"
-                        />
-                        {errors.email && (
-                          <p className="text-red-500 text-sm mt-1">
-                            {errors.email}
-                          </p>
+                        {message && (
+                          <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300 px-4 py-3 rounded-xl text-sm mb-6">
+                            {message}
+                          </div>
                         )}
-                      </div>
 
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                          Birth Date
-                        </label>
-                        <input
-                          type="date"
-                          value={
-                            user.birthdate
-                              ? new Date(user.birthdate)
-                                  .toISOString()
-                                  .split("T")[0]
-                              : ""
-                          }
-                          disabled
-                          className="w-full px-4 py-3 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-500 dark:text-slate-400 cursor-not-allowed"
-                        />
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                          Birth date cannot be changed
-                        </p>
-                      </div>
-
-                      {errors.submit && (
-                        <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-xl text-sm">
-                          {errors.submit}
-                        </div>
-                      )}
-
-                      <div className="flex justify-end">
-                        <button
-                          type="submit"
-                          disabled={loading}
-                          className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg hover:shadow-purple-500/25 transform hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
-                        >
-                          {loading ? (
-                            <div className="flex items-center">
-                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                              Updating...
+                        <form onSubmit={handleSubmit} className="space-y-6">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                Full Name
+                              </label>
+                              <input
+                                type="text"
+                                name="name"
+                                value={formData.name}
+                                onChange={handleChange}
+                                className="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/20 transition-all duration-200 text-slate-900 dark:text-slate-100"
+                              />
+                              {errors.name && (
+                                <p className="text-red-500 text-sm mt-1">
+                                  {errors.name}
+                                </p>
+                              )}
                             </div>
-                          ) : (
-                            "Update Profile"
+
+                            <div>
+                              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                Username
+                              </label>
+                              <input
+                                type="text"
+                                value={user.username}
+                                disabled
+                                className="w-full px-4 py-3 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-500 dark:text-slate-400 cursor-not-allowed"
+                              />
+                              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                Username cannot be changed
+                              </p>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                              Email Address
+                            </label>
+                            <input
+                              type="email"
+                              name="email"
+                              value={formData.email}
+                              onChange={handleChange}
+                              className="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-xl focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/20 transition-all duration-200 text-slate-900 dark:text-slate-100"
+                            />
+                            {errors.email && (
+                              <p className="text-red-500 text-sm mt-1">
+                                {errors.email}
+                              </p>
+                            )}
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                              Birth Date
+                            </label>
+                            <input
+                              type="date"
+                              value={
+                                user.birthdate
+                                  ? new Date(user.birthdate)
+                                      .toISOString()
+                                      .split("T")[0]
+                                  : ""
+                              }
+                              disabled
+                              className="w-full px-4 py-3 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl text-slate-500 dark:text-slate-400 cursor-not-allowed"
+                            />
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                              Birth date cannot be changed
+                            </p>
+                          </div>
+
+                          {errors.submit && (
+                            <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-xl text-sm">
+                              {errors.submit}
+                            </div>
                           )}
-                        </button>
-                      </div>
-                    </form>
+
+                          <div className="flex justify-end">
+                            <button
+                              type="submit"
+                              disabled={loading}
+                              className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg hover:shadow-purple-500/25 transform hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
+                            >
+                              {loading ? (
+                                <div className="flex items-center">
+                                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                                  Updating...
+                                </div>
+                              ) : (
+                                "Update Profile"
+                              )}
+                            </button>
+                          </div>
+                        </form>
+                      </>
+                    )}
                   </div>
                 )}
 

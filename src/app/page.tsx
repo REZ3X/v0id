@@ -4,6 +4,7 @@ import { UserSession } from "@/models/User";
 import AuthGuard from "@/components/auth/AuthGuard";
 import Navbar from "@/components/shared/Navbar";
 import Sidebar from "@/components/chats/SideBar";
+import Image from "next/image";
 
 interface Message {
   _id: string;
@@ -25,6 +26,7 @@ export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const [sending, setSending] = useState(false);
+  const [voidTyping, setVoidTyping] = useState(false);
   const [chats, setChats] = useState<Chat[]>([]);
   const [currentChat, setCurrentChat] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -35,8 +37,46 @@ export default function Home() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [chatToDelete, setChatToDelete] = useState<Chat | null>(null);
   const [deletingChat, setDeletingChat] = useState<string | null>(null);
+  const [showDevNotice, setShowDevNotice] = useState(false);
 
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const formatMessageContent = (content: string) => {
+    const parts = content.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g);
+
+    return parts.map((part, index) => {
+      if (part.startsWith("**") && part.endsWith("**")) {
+        const text = part.slice(2, -2);
+        return (
+          <strong key={index} className="font-bold">
+            {text}
+          </strong>
+        );
+      } else if (part.startsWith("*") && part.endsWith("*")) {
+        const text = part.slice(1, -1);
+        return (
+          <em key={index} className="italic">
+            {text}
+          </em>
+        );
+      } else {
+        return part;
+      }
+    });
+  };
+
+  useEffect(() => {
+    const hasSeenNotice = sessionStorage.getItem("devNoticeShown");
+
+    if (!hasSeenNotice) {
+      setShowDevNotice(true);
+      sessionStorage.setItem("devNoticeShown", "true");
+    }
+  }, []);
+
+  const dismissDevNotice = () => {
+    setShowDevNotice(false);
+  };
 
   useEffect(() => {
     fetchUser();
@@ -47,23 +87,13 @@ export default function Home() {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages]);
+  }, [messages, voidTyping]);
 
   useEffect(() => {
     if (currentChat) {
       fetchMessages(currentChat);
     }
   }, [currentChat]);
-
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = `${Math.min(
-        textareaRef.current.scrollHeight,
-        120
-      )}px`;
-    }
-  }, [inputMessage]);
 
   const fetchUser = async () => {
     try {
@@ -177,7 +207,23 @@ export default function Home() {
       setSending(true);
       setError(null);
 
+      const tempUserMessage = {
+        _id: new Date().toISOString(),
+        content: inputMessage,
+        role: "user" as const,
+        createdAt: new Date(),
+      };
+
+      const currentInputMessage = inputMessage;
+      setInputMessage("");
+
       if (temporaryChat) {
+        setMessages([tempUserMessage]);
+
+        setTimeout(() => {
+          setVoidTyping(true);
+        }, 500);
+
         const response = await fetch("/api/chats", {
           method: "POST",
           headers: {
@@ -185,7 +231,7 @@ export default function Home() {
           },
           body: JSON.stringify({
             title: "New Chat",
-            firstMessage: inputMessage,
+            firstMessage: currentInputMessage,
           }),
         });
 
@@ -193,13 +239,7 @@ export default function Home() {
           const data = await response.json();
           setCurrentChat(data.chatId);
           setTemporaryChat(false);
-
-          const tempUserMessage = {
-            _id: new Date().toISOString(),
-            content: inputMessage,
-            role: "user" as const,
-            createdAt: new Date(),
-          };
+          setVoidTyping(false);
 
           const aiMessage = {
             _id: new Date().toISOString() + "-ai",
@@ -209,13 +249,13 @@ export default function Home() {
           };
 
           setMessages([tempUserMessage, aiMessage]);
-          setInputMessage("");
           await fetchChats();
 
           if (data.title) {
             console.log(`Chat created with title: "${data.title}"`);
           }
         } else {
+          setVoidTyping(false);
           const errorData = await response.json();
           setError(errorData.error);
         }
@@ -229,26 +269,23 @@ export default function Home() {
           return;
         }
 
-        const tempUserMessage = {
-          _id: new Date().toISOString(),
-          content: inputMessage,
-          role: "user" as const,
-          createdAt: new Date(),
-        };
-
         setMessages((prev) => [...prev, tempUserMessage]);
-        setInputMessage("");
+
+        setTimeout(() => {
+          setVoidTyping(true);
+        }, 500);
 
         const response = await fetch(`/api/chats/${currentChat}/messages`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ message: inputMessage }),
+          body: JSON.stringify({ message: currentInputMessage }),
         });
 
         if (response.ok) {
           const data = await response.json();
+          setVoidTyping(false);
 
           const aiMessage = {
             _id: new Date().toISOString() + "-ai",
@@ -260,12 +297,14 @@ export default function Home() {
           setMessages((prev) => [...prev, aiMessage]);
           fetchChats();
         } else {
+          setVoidTyping(false);
           const errorData = await response.json();
           setError(errorData.error);
         }
       }
     } catch (error) {
       console.error("Failed to send message:", error);
+      setVoidTyping(false);
       setError("An error occurred while sending message");
     } finally {
       setSending(false);
@@ -304,18 +343,14 @@ export default function Home() {
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
         <div className="text-center">
           <div className="mb-6">
-            <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center shadow-2xl shadow-purple-500/25 animate-bounce mx-auto">
-              <svg
-                className="w-10 h-10 text-white"
-                fill="currentColor"
-                viewBox="0 0 20 20"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"
-                  clipRule="evenodd"
-                />
-              </svg>
+            <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center shadow-2xl shadow-purple-500/25 animate-bounce mx-auto p-3">
+              <Image
+                src="/void/void.png"
+                alt="Void AI"
+                width={56}
+                height={56}
+                className="w-14 h-14 object-contain rounded-xl"
+              />
             </div>
           </div>
           <p className="text-purple-200 font-medium text-lg mb-4">
@@ -387,7 +422,7 @@ export default function Home() {
                 {temporaryChat
                   ? "New Chat"
                   : currentChat
-                  ? "Aria"
+                  ? "Void"
                   : "V0ID Chat"}
               </h1>
               <div className="w-9"></div>
@@ -395,29 +430,11 @@ export default function Home() {
 
             <div className="hidden lg:flex items-center justify-between p-4 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm border-b border-slate-200 dark:border-slate-700">
               <div className="flex items-center space-x-4">
-                <button
-                  onClick={() => setSidebarOpen(!sidebarOpen)}
-                  className="p-2 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
-                >
-                  <svg
-                    className="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M4 6h16M4 12h16M4 18h16"
-                    />
-                  </svg>
-                </button>
                 <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
                   {temporaryChat
                     ? "New Chat"
                     : currentChat
-                    ? "Chat with Aria"
+                    ? "Chat with Void"
                     : "Welcome to V0ID"}
                 </h2>
               </div>
@@ -470,30 +487,58 @@ export default function Home() {
               </div>
             )}
 
-            <div className="flex-1 overflow-y-auto p-4">
+            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+              <style jsx>{`
+                .custom-scrollbar::-webkit-scrollbar {
+                  width: 8px;
+                }
+                .custom-scrollbar::-webkit-scrollbar-track {
+                  background: transparent;
+                }
+                .custom-scrollbar::-webkit-scrollbar-thumb {
+                  background: rgba(148, 163, 184, 0.3);
+                  border-radius: 20px;
+                  border: 2px solid transparent;
+                  background-clip: content-box;
+                }
+                .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+                  background: rgba(148, 163, 184, 0.5);
+                  background-clip: content-box;
+                }
+                .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+                  background: rgba(71, 85, 105, 0.5);
+                  background-clip: content-box;
+                }
+                .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+                  background: rgba(71, 85, 105, 0.7);
+                  background-clip: content-box;
+                }
+                .custom-scrollbar {
+                  scrollbar-width: thin;
+                  scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
+                }
+                .dark .custom-scrollbar {
+                  scrollbar-color: rgba(71, 85, 105, 0.5) transparent;
+                }
+              `}</style>
+
               {!currentChat && !temporaryChat ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center max-w-md mx-auto px-6">
-                    <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center shadow-lg">
-                      <svg
-                        className="w-10 h-10 text-white"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                        />
-                      </svg>
+                    <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center shadow-lg p-3">
+                      <Image
+                        src="/void/void.png"
+                        alt="Void AI"
+                        width={56}
+                        height={56}
+                        className="w-14 h-14 object-contain rounded-xl"
+                      />
                     </div>
                     <h3 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-3">
                       Welcome to V0ID Chat
                     </h3>
                     <p className="text-slate-600 dark:text-slate-400 mb-8 leading-relaxed">
-                      Start a conversation with Aria, your personal AI companion
+                      Start a conversation with Void, your personal AI companion
                       who&lsquo;s here to chat, listen, and support you.
                     </p>
                     <button
@@ -520,29 +565,23 @@ export default function Home() {
               ) : messages.length === 0 && (temporaryChat || currentChat) ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center max-w-md mx-auto px-6">
-                    <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-lg">
-                      <svg
-                        className="w-8 h-8 text-white"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                        />
-                      </svg>
+                    <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center shadow-lg p-2.5">
+                      <Image
+                        src="/void/void.png"
+                        alt="Void AI"
+                        width={44}
+                        height={44}
+                        className="w-11 h-11 object-contain rounded-xl"
+                      />
                     </div>
                     <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100 mb-2">
                       {temporaryChat
                         ? "Start Your Conversation"
-                        : "Chat with Aria"}
+                        : "Chat with Void"}
                     </h3>
                     <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">
                       {temporaryChat
-                        ? "Type your first message below to begin chatting with Aria. Your conversation will be saved automatically."
+                        ? "Type your first message below to begin chatting with Void. Your conversation will be saved automatically."
                         : "Your caring AI companion is ready to chat. Share your thoughts, ask questions, or just have a friendly conversation."}
                     </p>
                   </div>
@@ -574,7 +613,7 @@ export default function Home() {
                             className={`w-8 h-8 rounded-full flex items-center justify-center shadow-sm ${
                               message.role === "user"
                                 ? "bg-gradient-to-br from-purple-600 to-pink-600 text-white"
-                                : "bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-600 dark:to-slate-700 text-slate-600 dark:text-slate-300"
+                                : "bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-600 dark:to-slate-700"
                             }`}
                           >
                             {message.role === "user" ? (
@@ -590,17 +629,15 @@ export default function Home() {
                                 />
                               </svg>
                             ) : (
-                              <svg
-                                className="w-4 h-4"
-                                fill="currentColor"
-                                viewBox="0 0 20 20"
-                              >
-                                <path
-                                  fillRule="evenodd"
-                                  d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"
-                                  clipRule="evenodd"
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-600 dark:to-slate-700 flex items-center justify-center shadow-sm p-1.5">
+                                <Image
+                                  src="/void/void.png"
+                                  alt="Void AI"
+                                  width={32}
+                                  height={32}
+                                  className="w-8 h-8 rounded-full object-cover shadow-sm"
                                 />
-                              </svg>
+                              </div>
                             )}
                           </div>
                         </div>
@@ -612,9 +649,9 @@ export default function Home() {
                               : "bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700"
                           }`}
                         >
-                          <p className="text-sm whitespace-pre-wrap leading-relaxed">
-                            {message.content}
-                          </p>
+                          <div className="text-sm whitespace-pre-wrap leading-relaxed">
+                            {formatMessageContent(message.content)}
+                          </div>
                           <p
                             className={`text-xs mt-2 ${
                               message.role === "user"
@@ -628,23 +665,18 @@ export default function Home() {
                       </div>
                     </div>
                   ))}
-                  {sending && (
+
+                  {voidTyping && (
                     <div className="flex justify-start">
                       <div className="flex max-w-md">
                         <div className="flex-shrink-0 mr-3">
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-600 dark:to-slate-700 flex items-center justify-center">
-                            <svg
-                              className="w-4 h-4 text-slate-600 dark:text-slate-300"
-                              fill="currentColor"
-                              viewBox="0 0 20 20"
-                            >
-                              <path
-                                fillRule="evenodd"
-                                d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"
-                                clipRule="evenodd"
-                              />
-                            </svg>
-                          </div>
+                          <Image
+                            src="/void/void.png"
+                            alt="Void AI"
+                            width={32}
+                            height={32}
+                            className="w-8 h-8 rounded-full object-cover shadow-sm"
+                          />
                         </div>
                         <div className="px-4 py-3 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
                           <div className="flex items-center space-x-2">
@@ -660,7 +692,7 @@ export default function Home() {
                               ></div>
                             </div>
                             <span className="text-sm text-slate-500 dark:text-slate-400">
-                              Aria is typing...
+                              Void is typing...
                             </span>
                           </div>
                         </div>
@@ -676,26 +708,26 @@ export default function Home() {
               <div className="p-4 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm border-t border-slate-200 dark:border-slate-700">
                 <div className="max-w-4xl mx-auto">
                   <div className="relative">
-                    <textarea
-                      ref={textareaRef}
+                    <input
+                      ref={inputRef}
+                      type="text"
                       value={inputMessage}
                       onChange={(e) => setInputMessage(e.target.value)}
                       onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
+                        if (e.key === "Enter") {
                           e.preventDefault();
                           sendMessage();
                         }
                       }}
                       placeholder={
                         temporaryChat
-                          ? "Start your conversation with Aria..."
-                          : "Message Aria..."
+                          ? "Start your conversation with Void..."
+                          : "Message Void..."
                       }
-                      className="w-full pl-4 pr-12 py-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-2xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none text-slate-900 dark:text-slate-100 placeholder-slate-500 dark:placeholder-slate-400 shadow-sm"
-                      rows={1}
-                      style={{ minHeight: "48px", maxHeight: "120px" }}
+                      className="w-full pl-4 pr-12 py-3 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-2xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent text-slate-900 dark:text-slate-100 placeholder-slate-500 dark:placeholder-slate-400 shadow-sm"
                       disabled={
                         sending ||
+                        voidTyping ||
                         (user?.role === "basic" && messages.length >= 50)
                       }
                     />
@@ -703,11 +735,13 @@ export default function Home() {
                       onClick={sendMessage}
                       disabled={
                         sending ||
+                        voidTyping ||
                         !inputMessage.trim() ||
                         (user?.role === "basic" && messages.length >= 50)
                       }
                       className={`absolute right-2 top-1/2 transform -translate-y-1/2 w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-200 ${
                         sending ||
+                        voidTyping ||
                         !inputMessage.trim() ||
                         (user?.role === "basic" && messages.length >= 50)
                           ? "bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed"
@@ -722,12 +756,12 @@ export default function Home() {
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
+                          strokeWidth={2.5}
                         >
                           <path
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                            d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"
                           />
                         </svg>
                       )}
@@ -753,6 +787,76 @@ export default function Home() {
             />
           )}
         </div>
+
+        {showDevNotice && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl rounded-2xl p-6 w-full max-w-md shadow-2xl border border-white/20 dark:border-slate-700/50 relative">
+              <div className="text-center mb-4">
+                <div className="w-12 h-12 bg-gradient-to-br from-yellow-500 to-orange-500 rounded-xl flex items-center justify-center mx-auto mb-3">
+                  <svg
+                    className="w-6 h-6 text-white"
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </div>
+                <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-1">
+                  🚧 Development Version
+                </h2>
+                <p className="text-sm text-slate-600 dark:text-slate-400">
+                  V0ID is currently in alpha - expect bugs and changes!
+                </p>
+              </div>
+
+              <div className="space-y-2 mb-6">
+                <div className="flex items-center space-x-2 text-sm text-slate-600 dark:text-slate-400">
+                  <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                  <span>Some features may not work perfectly</span>
+                </div>
+                <div className="flex items-center space-x-2 text-sm text-slate-600 dark:text-slate-400">
+                  <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                  <span>App updates frequently</span>
+                </div>
+                <div className="flex items-center space-x-2 text-sm text-slate-600 dark:text-slate-400">
+                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                  <span>Chats might be reset during updates</span>
+                </div>
+              </div>
+
+              <button
+                onClick={dismissDevNotice}
+                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-2.5 px-4 rounded-xl font-medium hover:shadow-lg transition-all duration-200"
+              >
+                Got it! 🚀
+              </button>
+
+              <button
+                onClick={dismissDevNotice}
+                className="absolute top-3 right-3 p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                title="Close"
+              >
+                <svg
+                  className="w-4 h-4 text-slate-500 dark:text-slate-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
+        )}
 
         {showDeleteModal && chatToDelete && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">

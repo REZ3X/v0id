@@ -234,7 +234,7 @@ export default function Sidebar({
                 alt="Void AI"
                 width={24}
                 height={24}
-                className="w-6 h-6 object-contain"
+                className="w-6 h-6 object-contain rounded-lg"
               />
             </div>
             <div>
